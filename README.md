@@ -1,3 +1,3 @@
 #### SRTN
-Shortest Remaining Task Next(SRTN) Algorithm Visualisation
+Shortest Remaining Time Next(SRTN) Algorithm Visualisation
 
