@@ -1,5 +1,7 @@
 // SRTN Scheduling Algorithm Visualization
 // State
+const step = 0.1; // Time step for the simulation
+
 let jobs = [];
 const colors = [
   "#FF6B6B",
@@ -10,6 +12,119 @@ const colors = [
   "#F67280",
   "#C06C84",
 ];
+
+const sampleJobs = {
+  1: [
+    {
+      id: 1,
+      arrivalTime: 0,
+      burstTime: 2,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+
+    {
+      id: 2,
+      arrivalTime: 0,
+      burstTime: 1.5,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+    {
+      id: 3,
+      arrivalTime: 0.5,
+      burstTime: 2,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+  ],
+  2: [
+    {
+      id: 1,
+      arrivalTime: 0,
+      burstTime: 3,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+
+    {
+      id: 2,
+      arrivalTime: 0,
+      burstTime: 1,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+    {
+      id: 3,
+      arrivalTime: 0,
+      burstTime: 4,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+
+    {
+      id: 4,
+      arrivalTime: 1,
+      burstTime: 1,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+  ],
+
+  // 3: [
+  //   {
+  //     id: 1,
+  //     arrivalTime: 0,
+  //     burstTime: 4,
+  //     remainingTime: 0,
+  //     startTime: -1,
+  //     endTime: 0,
+  //     turnaroundTime: 0,
+  //   },
+
+  //   {
+  //     id: 2,
+  //     arrivalTime: 0,
+  //     burstTime: 2,
+  //     remainingTime: 0,
+  //     startTime: -1,
+  //     endTime: 0,
+  //     turnaroundTime: 0,
+  //   },
+  //   {
+  //     id: 3,
+  //     arrivalTime: 0,
+  //     burstTime: 6,
+  //     remainingTime: 0,
+  //     startTime: -1,
+  //     endTime: 0,
+  //     turnaroundTime: 0,
+  //   },
+  //   {
+  //     id: 4,
+  //     arrivalTime: 0.5,
+  //     burstTime: 1.5,
+  //     remainingTime: 0,
+  //     startTime: -1,
+  //     endTime: 0,
+  //     turnaroundTime: 0,
+  //   },
+  // ],
+};
 
 function addJob(
   job = {
@@ -23,6 +138,17 @@ function addJob(
   }
 ) {
   jobs.push(job);
+
+  refreshUI();
+}
+
+function setSampleJob(sample) {
+  jobs =
+    sampleJobs[sample.value]?.map((job) => ({
+      ...job,
+      remainingTime: job.burstTime,
+    })) || [];
+
   refreshUI();
 }
 
@@ -53,6 +179,10 @@ function refreshUI() {
   });
 }
 
+function toFloat(value, decimals = step * 10) {
+  return parseFloat(value.toFixed(decimals));
+}
+
 function updateJobProperty(index, property, value) {
   jobs[index][property] = parseFloat(value);
   jobs[index].remainingTime = jobs[index].burstTime;
@@ -80,11 +210,7 @@ function calculateSRTN() {
   while (completedJobs < jobs.length) {
     // Check for new arrivals from previous time to current time
     jobs.forEach((job) => {
-      if (
-        job.arrivalTime > currentTime - 1 &&
-        job.arrivalTime <= currentTime &&
-        job.remainingTime > 0
-      )
+      if (job.arrivalTime == currentTime && job.remainingTime > 0)
         jobQueue.push(job);
     });
 
@@ -125,10 +251,11 @@ function calculateSRTN() {
         if (job) {
           job.startTime === -1 && (job.startTime = currentTime);
 
-          job.remainingTime--;
+          console.log({ remainingTime: job.remainingTime, step });
+          job.remainingTime = toFloat(job.remainingTime - step);
 
-          if (job.remainingTime <= 0) {
-            job.endTime = currentTime + 1 + job.remainingTime;
+          if (job.remainingTime == 0.0) {
+            job.endTime = toFloat(currentTime + step);
             job.turnaroundTime = job.endTime - job.arrivalTime;
             completedJobs++;
           }
@@ -141,7 +268,7 @@ function calculateSRTN() {
         jobId: runningJobs[i]?.id || "idle",
         cpuId: i,
         startTime: currentTime,
-        endTime: currentTime + 1,
+        endTime: toFloat(currentTime + step),
       });
     }
 
@@ -153,8 +280,16 @@ function calculateSRTN() {
       )
     );
 
-    currentTime++;
+    currentTime = toFloat(currentTime + step);
   }
+
+  const startTimes = [...new Set(jobs.map((entry) => entry.startTime))];
+
+  console.log(startTimes);
+
+  jobQueueHistory = jobQueueHistory.filter((job) =>
+    startTimes.includes(job.time)
+  );
 
   jobQueueHistory.push({
     time: currentTime,
@@ -189,6 +324,10 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
   const ganttChart = document.getElementById("ganttChart");
   ganttChart.innerHTML = "";
 
+  const timeQuantum = Math.min(
+    1,
+    parseInt(document.getElementById("timeQuantum").value)
+  );
   const maxEndTime = Math.max(...jobHistory.map((entry) => entry.endTime));
   const cpuCount = parseInt(document.getElementById("cpuCount").value);
 
@@ -242,12 +381,24 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
   ganttChart.appendChild(timeAxisDiv);
 
   // Add time markers and job queues
+  let qt = timeQuantum;
   for ({ time: t, jobs } of jobQueueHistory) {
+    const markerDiv1 = document.createElement("div");
+    markerDiv1.className = "time-marker";
+    markerDiv1.style.left = `${(qt / maxEndTime) * 100}%`;
+    markerDiv1.textContent = qt;
+    timeAxisDiv.appendChild(markerDiv1);
+
     const markerDiv = document.createElement("div");
     markerDiv.className = "time-marker";
     markerDiv.style.left = `${(t / maxEndTime) * 100}%`;
     markerDiv.textContent = t;
     timeAxisDiv.appendChild(markerDiv);
+
+    const lineDiv1 = document.createElement("div");
+    lineDiv1.className = "dashed-line";
+    lineDiv1.style.left = `${(qt / maxEndTime) * 100}%`;
+    ganttChart.appendChild(lineDiv1);
 
     const lineDiv = document.createElement("div");
     lineDiv.className = "dashed-line";
@@ -272,6 +423,8 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
       queueDiv.appendChild(queueJobsDiv);
       ganttChart.appendChild(queueDiv);
     }
+
+    qt += timeQuantum;
   }
 
   // Add job arrival markers
@@ -305,42 +458,3 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
     "ganttChartContainer"
   ).style.height = `${containerHeight}px`;
 }
-
-addJob({
-  id: jobs.length + 1,
-  arrivalTime: 0,
-  burstTime: 2,
-  remainingTime: 0,
-  startTime: -1,
-  endTime: 0,
-  turnaroundTime: 0,
-});
-
-addJob({
-  id: jobs.length + 1,
-  arrivalTime: 0,
-  burstTime: 1.5,
-  remainingTime: 0,
-  startTime: -1,
-  endTime: 0,
-  turnaroundTime: 0,
-});
-addJob({
-  id: jobs.length + 1,
-  arrivalTime: 0.5,
-  burstTime: 2,
-  remainingTime: 0,
-  startTime: -1,
-  endTime: 0,
-  turnaroundTime: 0,
-});
-
-// addJob({
-//   id: jobs.length + 1,
-//   arrivalTime: 1,
-//   burstTime: 1,
-//   remainingTime: 0,
-//   startTime: -1,
-//   endTime: 0,
-//   turnaroundTime: 0,
-// });
