@@ -11,8 +11,8 @@ const colors = [
   "#C06C84",
 ];
 
-function addJob() {
-  const newJob = {
+function addJob(
+  job = {
     id: jobs.length + 1,
     arrivalTime: 0,
     burstTime: 1,
@@ -20,14 +20,11 @@ function addJob() {
     startTime: -1,
     endTime: 0,
     turnaroundTime: 0,
-    lastExecutionTime: -1,
-    inQueue: false,
-  };
-  jobs.push(newJob);
+  }
+) {
+  jobs.push(job);
   refreshUI();
 }
-
-console.log("Initial jobs:", jobs);
 
 function removeJob(id) {
   jobs = jobs.filter((job) => job.id !== id);
@@ -57,7 +54,7 @@ function refreshUI() {
 }
 
 function updateJobProperty(index, property, value) {
-  jobs[index][property] = parseInt(value);
+  jobs[index][property] = parseFloat(value);
   jobs[index].remainingTime = jobs[index].burstTime;
 }
 
@@ -71,8 +68,6 @@ function calculateSRTN() {
     job.startTime = -1;
     job.endTime = 0;
     job.turnaroundTime = 0;
-    job.lastExecutionTime = -1;
-    job.inQueue = false;
   });
 
   let currentTime = 0;
@@ -83,91 +78,91 @@ function calculateSRTN() {
   let jobQueue = [];
 
   while (completedJobs < jobs.length) {
-    // Check for new arrivals at current time
+    // Check for new arrivals from previous time to current time
     jobs.forEach((job) => {
       if (
-        job.arrivalTime === currentTime &&
-        job.remainingTime > 0 &&
-        !job.inQueue
-      ) {
+        job.arrivalTime > currentTime - 1 &&
+        job.arrivalTime <= currentTime &&
+        job.remainingTime > 0
+      )
         jobQueue.push(job);
-        job.inQueue = true;
-      }
     });
 
-    // At time quantum intervals or when any job completes
-    if (
-      currentTime % timeQuantum === 0 ||
-      runningJobs.some((job) => job && job.remainingTime === 0)
-    ) {
-      // Return running jobs to queue if they're not finished
-      runningJobs.forEach((runningJob, index) => {
-        if (runningJob !== null && runningJob.remainingTime > 0) {
-          jobQueue.push(runningJob);
-          runningJobs[index] = null;
-        }
-      });
+    //
+    runningJobs.forEach((runningJob, i) => {
+      if (runningJob?.remainingTime > 0) jobQueue.push(runningJob);
 
-      // Sort queue by remaining time and arrival time
-      jobQueue.sort((a, b) => {
-        if (a.remainingTime === b.remainingTime) {
-          return a.arrivalTime - b.arrivalTime;
-        }
-        return a.remainingTime - b.remainingTime;
-      });
+      runningJobs[i] = null;
+    });
 
-      // Record queue state for visualization
-      jobQueueHistory.push({
-        time: currentTime,
-        jobs: jobQueue.map((job) => ({
-          id: job.id,
-          remainingTime: job.remainingTime,
+    // Sort queue by remaining time and arrival time
+    jobQueue.sort((a, b) =>
+      a.remainingTime === b.remainingTime
+        ? a.arrivalTime - b.arrivalTime
+        : a.remainingTime - b.remainingTime
+    );
+
+    // Record queue state for visualization
+    jobQueueHistory.push({
+      time: currentTime,
+      jobs: jobQueue
+        // .toSorted((a, b) => a.id - b.id)
+        .map(({ id, remainingTime }) => ({
+          id,
+          remainingTime,
         })),
-      });
+    });
 
-      // Assign jobs to available CPUs
-      for (let i = 0; i < cpuCount && jobQueue.length > 0; i++) {
-        if (runningJobs[i] === null) {
-          let job = jobQueue.shift();
-          if (job.startTime === -1) {
-            job.startTime = currentTime;
-          }
-          runningJobs[i] = job;
-        }
-      }
-    }
+    console.log(
+      JSON.stringify({ currentTime, completedJobs, jobQueue }, null, 2)
+    );
 
-    // Process current time unit
+    // Assign jobs to available CPUs
     for (let i = 0; i < cpuCount; i++) {
-      if (runningJobs[i]) {
-        let job = runningJobs[i];
-        jobHistory.push({
-          jobId: job.id,
-          cpuId: i,
-          startTime: currentTime,
-          endTime: currentTime + 1,
-        });
+      if (runningJobs[i] === null) {
+        let job = jobQueue.shift() || null;
 
-        job.remainingTime--;
+        if (job) {
+          job.startTime === -1 && (job.startTime = currentTime);
 
-        if (job.remainingTime === 0) {
-          job.endTime = currentTime + 1;
-          job.turnaroundTime = job.endTime - job.arrivalTime;
-          completedJobs++;
-          runningJobs[i] = null;
+          job.remainingTime--;
+
+          if (job.remainingTime <= 0) {
+            job.endTime = currentTime + 1 + job.remainingTime;
+            job.turnaroundTime = job.endTime - job.arrivalTime;
+            completedJobs++;
+          }
         }
-      } else {
-        jobHistory.push({
-          jobId: "idle",
-          cpuId: i,
-          startTime: currentTime,
-          endTime: currentTime + 1,
-        });
+
+        runningJobs[i] = job;
       }
+
+      jobHistory.push({
+        jobId: runningJobs[i]?.id || "idle",
+        cpuId: i,
+        startTime: currentTime,
+        endTime: currentTime + 1,
+      });
     }
+
+    console.log(
+      JSON.stringify(
+        { jobQueue, runningJobs, currentTime, completedJobs },
+        null,
+        2
+      )
+    );
 
     currentTime++;
   }
+
+  jobQueueHistory.push({
+    time: currentTime,
+    jobs: [],
+  });
+
+  console.log(JSON.stringify(jobQueueHistory, null, 2));
+  console.log(JSON.stringify(jobHistory, null, 2));
 
   refreshUI();
   calculateAverageTurnaroundTime();
@@ -195,14 +190,10 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
   ganttChart.innerHTML = "";
 
   const maxEndTime = Math.max(...jobHistory.map((entry) => entry.endTime));
-  const timeQuantum = parseInt(document.getElementById("timeQuantum").value);
+  const cpuCount = parseInt(document.getElementById("cpuCount").value);
 
   // Draw CPU rows
-  for (
-    let i = 0;
-    i < parseInt(document.getElementById("cpuCount").value);
-    i++
-  ) {
+  for (let i = 0; i < cpuCount; i++) {
     const rowDiv = document.createElement("div");
     rowDiv.className = "cpu-row";
     ganttChart.appendChild(rowDiv);
@@ -251,7 +242,7 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
   ganttChart.appendChild(timeAxisDiv);
 
   // Add time markers and job queues
-  for (let t = 0; t <= maxEndTime; t += timeQuantum) {
+  for ({ time: t, jobs } of jobQueueHistory) {
     const markerDiv = document.createElement("div");
     markerDiv.className = "time-marker";
     markerDiv.style.left = `${(t / maxEndTime) * 100}%`;
@@ -263,8 +254,7 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
     lineDiv.style.left = `${(t / maxEndTime) * 100}%`;
     ganttChart.appendChild(lineDiv);
 
-    const queueEntry = jobQueueHistory.find((entry) => entry.time === t);
-    if (queueEntry) {
+    if (jobs) {
       const queueDiv = document.createElement("div");
       queueDiv.className = "queue-container";
       queueDiv.style.left = `${(t / maxEndTime) * 100}%`;
@@ -272,12 +262,12 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
 
       const queueJobsDiv = document.createElement("div");
       queueJobsDiv.className = "queue-jobs";
-      if (queueEntry.jobs.length > 0) {
-        queueJobsDiv.innerHTML = queueEntry.jobs
-          .map((job) => `J${job.id} = ${job.remainingTime}`)
+      if (jobs.length > 0) {
+        queueJobsDiv.innerHTML = jobs
+          .map(({ id, remainingTime }) => `J${id} = ${remainingTime}`)
           .join("<br>");
       } else {
-        queueJobsDiv.innerHTML = "{ }";
+        queueJobsDiv.innerHTML = "𝛳";
       }
       queueDiv.appendChild(queueJobsDiv);
       ganttChart.appendChild(queueDiv);
@@ -315,3 +305,42 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
     "ganttChartContainer"
   ).style.height = `${containerHeight}px`;
 }
+
+addJob({
+  id: jobs.length + 1,
+  arrivalTime: 0,
+  burstTime: 2,
+  remainingTime: 0,
+  startTime: -1,
+  endTime: 0,
+  turnaroundTime: 0,
+});
+
+addJob({
+  id: jobs.length + 1,
+  arrivalTime: 0,
+  burstTime: 1.5,
+  remainingTime: 0,
+  startTime: -1,
+  endTime: 0,
+  turnaroundTime: 0,
+});
+addJob({
+  id: jobs.length + 1,
+  arrivalTime: 0.5,
+  burstTime: 2,
+  remainingTime: 0,
+  startTime: -1,
+  endTime: 0,
+  turnaroundTime: 0,
+});
+
+// addJob({
+//   id: jobs.length + 1,
+//   arrivalTime: 1,
+//   burstTime: 1,
+//   remainingTime: 0,
+//   startTime: -1,
+//   endTime: 0,
+//   turnaroundTime: 0,
+// });
