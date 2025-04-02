@@ -85,45 +85,45 @@ const sampleJobs = {
     },
   ],
 
-  // 3: [
-  //   {
-  //     id: 1,
-  //     arrivalTime: 0,
-  //     burstTime: 4,
-  //     remainingTime: 0,
-  //     startTime: -1,
-  //     endTime: 0,
-  //     turnaroundTime: 0,
-  //   },
+  3: [
+    {
+      id: 1,
+      arrivalTime: 0,
+      burstTime: 4,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
 
-  //   {
-  //     id: 2,
-  //     arrivalTime: 0,
-  //     burstTime: 2,
-  //     remainingTime: 0,
-  //     startTime: -1,
-  //     endTime: 0,
-  //     turnaroundTime: 0,
-  //   },
-  //   {
-  //     id: 3,
-  //     arrivalTime: 0,
-  //     burstTime: 6,
-  //     remainingTime: 0,
-  //     startTime: -1,
-  //     endTime: 0,
-  //     turnaroundTime: 0,
-  //   },
-  //   {
-  //     id: 4,
-  //     arrivalTime: 0.5,
-  //     burstTime: 1.5,
-  //     remainingTime: 0,
-  //     startTime: -1,
-  //     endTime: 0,
-  //     turnaroundTime: 0,
-  //   },
-  // ],
+    {
+      id: 2,
+      arrivalTime: 0,
+      burstTime: 2,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+    {
+      id: 3,
+      arrivalTime: 0,
+      burstTime: 6,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+    {
+      id: 4,
+      arrivalTime: 0.5,
+      burstTime: 1.5,
+      remainingTime: 0,
+      startTime: -1,
+      endTime: 0,
+      turnaroundTime: 0,
+    },
+  ],
 };
 
 function addJob(
@@ -187,6 +187,7 @@ function updateJobProperty(index, property, value) {
   jobs[index][property] = parseFloat(value);
   jobs[index].remainingTime = jobs[index].burstTime;
 }
+function resetJobs() {}
 
 function calculateSRTN() {
   const cpuCount = parseInt(document.getElementById("cpuCount").value);
@@ -210,7 +211,20 @@ function calculateSRTN() {
   while (completedJobs < jobs.length) {
     // Check for new arrivals from previous time to current time
     jobs.forEach((job) => {
-      if (job.arrivalTime == currentTime && job.remainingTime > 0)
+      console.log(
+        currentTime,
+        runningJobs,
+        runningJobs.some((runningJob) =>
+          runningJob ? runningJob.remainingTime == 0 : true
+        )
+      );
+      if (
+        job.arrivalTime == currentTime &&
+        job.remainingTime > 0
+        // runningJobs.some((runningJob) =>
+        //   runningJob ? runningJob.remainingTime == 0 : true
+        // )
+      )
         jobQueue.push(job);
     });
 
@@ -281,6 +295,8 @@ function calculateSRTN() {
     );
 
     currentTime = toFloat(currentTime + step);
+
+    // if (currentTime == 1.2) break;
   }
 
   const startTimes = [...new Set(jobs.map((entry) => entry.startTime))];
@@ -382,7 +398,7 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
 
   // Add time markers and job queues
   let qt = timeQuantum;
-  for ({ time: t, jobs } of jobQueueHistory) {
+  for ({ time: t, jobs: j } of jobQueueHistory) {
     const markerDiv1 = document.createElement("div");
     markerDiv1.className = "time-marker";
     markerDiv1.style.left = `${(qt / maxEndTime) * 100}%`;
@@ -405,7 +421,7 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
     lineDiv.style.left = `${(t / maxEndTime) * 100}%`;
     ganttChart.appendChild(lineDiv);
 
-    if (jobs) {
+    if (j) {
       const queueDiv = document.createElement("div");
       queueDiv.className = "queue-container";
       queueDiv.style.left = `${(t / maxEndTime) * 100}%`;
@@ -413,8 +429,8 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
 
       const queueJobsDiv = document.createElement("div");
       queueJobsDiv.className = "queue-jobs";
-      if (jobs.length > 0) {
-        queueJobsDiv.innerHTML = jobs
+      if (j.length > 0) {
+        queueJobsDiv.innerHTML = j
           .map(({ id, remainingTime }) => `J${id} = ${remainingTime}`)
           .join("<br>");
       } else {
