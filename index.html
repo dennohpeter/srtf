@@ -20,7 +20,7 @@
   </head>
   <body>
     <div class="container">
-      <h1>Shortest Remaining Time Next (SRTN) Visualization</h1>
+      <h1>SRTF + Round Robin Scheduling</h1>
 
       <!-- Actions -->
       <div class="input-group">
@@ -41,16 +41,35 @@
         <select
           class="form-select rounded"
           aria-label="Default select example"
-          id="jobSampleSelect"
-          onchange="setSampleJob(this)"
+          id="setJob"
+          onchange="setJob(this)"
         >
           <option selected>Select Job Load</option>
           <option value="1">Load Case 1</option>
           <option value="2">Load Case 2</option>
           <option value="3">Load Case 3</option>
         </select>
+
+        <select
+          class="form-select rounded"
+          aria-label="Default select example"
+          id="displayBy"
+        >
+          <option value="anytime" selected>Anytime</option>
+          <option value="quantum">Quantum</option>
+        </select>
+
+        <select
+          class="form-select rounded"
+          aria-label="Default select example"
+          id="algorithm"
+        >
+          <option value="srtf" selected>SRTF</option>
+          <option value="rr">Round Robin</option>
+        </select>
+
         <button onclick="calculateSRTN()" class="success">
-          Calculate SRTN
+          Calculate
           <span class="material-icons">settings</span>
         </button>
       </div>

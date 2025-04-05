@@ -1,19 +1,7 @@
-// SRTN Scheduling Algorithm Visualization
-// State
-const step = 0.1; // Time step for the simulation
-
-let jobs = [];
-const colors = [
-  "#FF6B6B",
-  "#4ECDC4",
-  "#45B7D1",
-  "#FFA07A",
-  "#98D8C8",
-  "#F67280",
-  "#C06C84",
-];
-
-const sampleJobs = {
+// -----------------------------------------------------------------------------------//
+//                            // Global Variables //---------------------------------//
+// -----------------------------------------------------------------------------------//
+const DEFAULT_JOBS = {
   1: [
     {
       id: 1,
@@ -28,7 +16,7 @@ const sampleJobs = {
     {
       id: 2,
       arrivalTime: 0,
-      burstTime: 1.5,
+      burstTime: 1,
       remainingTime: 0,
       startTime: -1,
       endTime: 0,
@@ -125,8 +113,19 @@ const sampleJobs = {
     },
   ],
 };
+const COLORS = [
+  "#FF6B6B",
+  "#4ECDC4",
+  "#45B7D1",
+  "#FFA07A",
+  "#98D8C8",
+  "#F67280",
+  "#C06C84",
+];
 
-function addJob(
+let jobs = [];
+
+const addJob = (
   job = {
     id: jobs.length + 1,
     arrivalTime: 0,
@@ -136,62 +135,46 @@ function addJob(
     endTime: 0,
     turnaroundTime: 0,
   }
-) {
+) => {
   jobs.push(job);
 
   refreshUI();
-}
+};
 
-function setSampleJob(sample) {
+const setJob = ({ value: id }) => {
   jobs =
-    sampleJobs[sample.value]?.map((job) => ({
+    DEFAULT_JOBS[id]?.map((job) => ({
       ...job,
       remainingTime: job.burstTime,
     })) || [];
 
   refreshUI();
-}
+};
 
-function removeJob(id) {
+const deleteJob = (id) => {
   jobs = jobs.filter((job) => job.id !== id);
   refreshUI();
+};
+
+function updateJobProperty(id, property, value) {
+  jobs[id][property] = parseFloat(value);
+  jobs[id].remainingTime = jobs[id].burstTime;
 }
 
-function refreshUI() {
-  const tableBody = document.querySelector("#jobTable tbody");
-  tableBody.innerHTML = "";
-  jobs.forEach((job, index) => {
-    const row = tableBody.insertRow();
-    row.innerHTML = `<td>J${job.id}</td>
-              <td><input type="number" value="${
-                job.arrivalTime
-              }" min="0" onchange="updateJobProperty(${index}, 'arrivalTime', this.value)"></td>
-              <td><input type="number" value="${
-                job.burstTime
-              }" min="1" onchange="updateJobProperty(${index}, 'burstTime', this.value)"></td>
-              <td>${job.startTime === -1 ? "-" : job.startTime}</td>
-              <td>${job.endTime}</td>
-              <td>${job.turnaroundTime}</td>
-                <td><button class="error" onclick="removeJob(${job.id})">
-                <span class="material-icons"
-                title="Remove Job J${job.id}">delete_forever</span>
-                </button></td>`;
-  });
-}
-
-function toFloat(value, decimals = step * 10) {
-  return parseFloat(value.toFixed(decimals));
-}
-
-function updateJobProperty(index, property, value) {
-  jobs[index][property] = parseFloat(value);
-  jobs[index].remainingTime = jobs[index].burstTime;
-}
-function resetJobs() {}
-
-function calculateSRTN() {
-  const cpuCount = parseInt(document.getElementById("cpuCount").value);
+const calculateSRTN = () => {
   const timeQuantum = parseInt(document.getElementById("timeQuantum").value);
+  const algorithm = document.getElementById("algorithm").value;
+  const displayBy = document.getElementById("displayBy").value;
+
+  console.log(
+    `Algorithm: ${algorithm}, Time Quantum: ${timeQuantum}, Display By: ${displayBy}`
+  );
+
+  algo(algorithm, displayBy === "quantum" ? timeQuantum : undefined);
+};
+
+const algo = (algorithm, quantum = undefined) => {
+  const cpuCount = parseInt(document.getElementById("cpuCount").value);
 
   // Reset job states
   jobs.forEach((job) => {
@@ -202,106 +185,95 @@ function calculateSRTN() {
   });
 
   let currentTime = 0;
-  let completedJobs = 0;
-  let runningJobs = new Array(cpuCount).fill(null);
+  let completed = 0;
+  let running = new Array(cpuCount).fill(null);
   let jobHistory = [];
   let jobQueueHistory = [];
   let jobQueue = [];
 
-  while (completedJobs < jobs.length) {
+  // calculate no.of dps based on the burst time or arrival time
+  // e.g 1.5 = 0.1, 2.5 = 0.1, 1 = 1, 100 = 1, 1.45 = 0.01
+  const STEP = Math.max(
+    0,
+    ...jobs.map((job) => job.burstTime.toString().split(".")[1]?.length || 0),
+    ...jobs.map((job) => job.arrivalTime.toString().split(".")[1]?.length || 0)
+  );
+
+  while (completed < jobs.length) {
     // Check for new arrivals from previous time to current time
     jobs.forEach((job) => {
-      console.log(
-        currentTime,
-        runningJobs,
-        runningJobs.some((runningJob) =>
-          runningJob ? runningJob.remainingTime == 0 : true
-        )
-      );
-      if (
-        job.arrivalTime == currentTime &&
-        job.remainingTime > 0
-        // runningJobs.some((runningJob) =>
-        //   runningJob ? runningJob.remainingTime == 0 : true
-        // )
-      )
+      if (job.arrivalTime == currentTime && job.remainingTime > 0) {
         jobQueue.push(job);
+      }
     });
 
-    //
-    runningJobs.forEach((runningJob, i) => {
-      if (runningJob?.remainingTime > 0) jobQueue.push(runningJob);
+    if (quantum ? currentTime % quantum == 0 : true) {
+      //
+      running.forEach((runningJob, i) => {
+        if (runningJob?.remainingTime > 0) jobQueue.push(runningJob);
+        running[i] = null;
+      });
+      // Sort queue by remaining time and arrival time
 
-      runningJobs[i] = null;
-    });
+      algorithm === "srtf" &&
+        jobQueue.sort((a, b) =>
+          a.remainingTime === b.remainingTime
+            ? a.arrivalTime - b.arrivalTime
+            : a.remainingTime - b.remainingTime
+        );
 
-    // Sort queue by remaining time and arrival time
-    jobQueue.sort((a, b) =>
-      a.remainingTime === b.remainingTime
-        ? a.arrivalTime - b.arrivalTime
-        : a.remainingTime - b.remainingTime
-    );
+      // Record queue state for visualization
+      jobQueueHistory.push({
+        time: currentTime,
+        jobs: jobQueue
+          // .toSorted((a, b) => a.id - b.id)
+          .map(({ id, remainingTime }) => ({
+            id,
+            remainingTime,
+          })),
+      });
 
-    // Record queue state for visualization
-    jobQueueHistory.push({
-      time: currentTime,
-      jobs: jobQueue
-        // .toSorted((a, b) => a.id - b.id)
-        .map(({ id, remainingTime }) => ({
-          id,
-          remainingTime,
-        })),
-    });
+      // Assign jobs to available CPUs
+      for (let i = 0; i < cpuCount; i++) {
+        if (running[i] === null) {
+          let job = jobQueue.shift() || null;
+          if (job) job.startTime === -1 && (job.startTime = currentTime);
 
-    console.log(
-      JSON.stringify({ currentTime, completedJobs, jobQueue }, null, 2)
-    );
-
-    // Assign jobs to available CPUs
-    for (let i = 0; i < cpuCount; i++) {
-      if (runningJobs[i] === null) {
-        let job = jobQueue.shift() || null;
-
-        if (job) {
-          job.startTime === -1 && (job.startTime = currentTime);
-
-          console.log({ remainingTime: job.remainingTime, step });
-          job.remainingTime = toFloat(job.remainingTime - step);
-
-          if (job.remainingTime == 0.0) {
-            job.endTime = toFloat(currentTime + step);
-            job.turnaroundTime = job.endTime - job.arrivalTime;
-            completedJobs++;
-          }
+          running[i] = job;
         }
+      }
+    }
+    for (let i = 0; i < cpuCount; i++) {
+      const job = running[i];
 
-        runningJobs[i] = job;
+      if (job) {
+        job.remainingTime = toFloat(
+          job.remainingTime - Math.pow(10, -STEP),
+          STEP
+        );
+
+        if (job.remainingTime == 0) {
+          job.endTime = toFloat(currentTime + Math.pow(10, -STEP), STEP);
+          job.turnaroundTime = job.endTime - job.arrivalTime;
+          completed++;
+
+          // Remove job from queue
+          running[i] = null;
+        }
       }
 
       jobHistory.push({
-        jobId: runningJobs[i]?.id || "idle",
+        jobId: job?.id || "idle",
         cpuId: i,
         startTime: currentTime,
-        endTime: toFloat(currentTime + step),
+        endTime: toFloat(currentTime + Math.pow(10, -STEP), STEP),
       });
     }
 
-    console.log(
-      JSON.stringify(
-        { jobQueue, runningJobs, currentTime, completedJobs },
-        null,
-        2
-      )
-    );
-
-    currentTime = toFloat(currentTime + step);
-
-    // if (currentTime == 1.2) break;
+    currentTime = toFloat(currentTime + Math.pow(10, -STEP), STEP);
   }
 
   const startTimes = [...new Set(jobs.map((entry) => entry.startTime))];
-
-  console.log(startTimes);
 
   jobQueueHistory = jobQueueHistory.filter((job) =>
     startTimes.includes(job.time)
@@ -312,15 +284,12 @@ function calculateSRTN() {
     jobs: [],
   });
 
-  console.log(JSON.stringify(jobQueueHistory, null, 2));
-  console.log(JSON.stringify(jobHistory, null, 2));
-
   refreshUI();
   calculateAverageTurnaroundTime();
   drawGanttChart(jobHistory, jobQueueHistory);
-}
+};
 
-function calculateAverageTurnaroundTime() {
+const calculateAverageTurnaroundTime = () => {
   const turnaroundTimes = jobs.map((job) => job.turnaroundTime);
   const totalTurnaroundTime = turnaroundTimes.reduce(
     (sum, time) => sum + time,
@@ -331,12 +300,41 @@ function calculateAverageTurnaroundTime() {
   const calculation = turnaroundTimes.join(" + ");
   const result = averageTurnaroundTime.toFixed(2);
 
-  document.getElementById("averageTurnaroundTime").innerHTML = `
-          Avg: (${calculation}) / ${jobs.length} = <b>${result}</b>
-      `;
-}
+  const html = `Avg: (${calculation}) / ${jobs.length} = <b>${result}</b>`;
 
-function drawGanttChart(jobHistory, jobQueueHistory) {
+  document.getElementById("averageTurnaroundTime").innerHTML = html;
+};
+
+// -----------------------------------------------------------------------------------//
+//                            // UI Functions //---------------------------------//
+// -----------------------------------------------------------------------------------//
+const refreshUI = () => {
+  const tableBody = document.querySelector("#jobTable tbody");
+  tableBody.innerHTML = "";
+  jobs.forEach((job, i) => {
+    const row = tableBody.insertRow();
+    const html = `<td>J${job.id}</td>
+              <td><input type="number" value="${
+                job.arrivalTime
+              }" min="0" onchange="updateJobProperty(${i}, 'arrivalTime', this.value)"></td>
+              <td><input type="number" value="${
+                job.burstTime
+              }" min="1" onchange="updateJobProperty(${i}, 'burstTime', this.value)"></td>
+              <td>${job.startTime === -1 ? "-" : job.startTime}</td>
+              <td>${job.endTime}</td>
+              <td>${job.turnaroundTime}</td>
+                <td><button class="error" onclick="deleteJob(${job.id})">
+                <span class="material-icons"
+                title="Remove Job J${job.id}">delete_forever</span>
+                </button></td>`;
+    row.innerHTML = html;
+  });
+};
+
+// -----------------------------------------------------------------------------------//
+//                            // Gantt Chart Functions //---------------------------------//
+// -----------------------------------------------------------------------------------//
+const drawGanttChart = (jobHistory, jobQueueHistory) => {
   const ganttChart = document.getElementById("ganttChart");
   ganttChart.innerHTML = "";
 
@@ -377,7 +375,7 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
             currentBlock.classList.add("idle-block");
           } else {
             currentBlock.style.backgroundColor =
-              colors[(entry.jobId - 1) % colors.length];
+              COLORS[(entry.jobId - 1) % COLORS.length];
             currentBlock.textContent = `J${entry.jobId}`;
           }
         }
@@ -473,4 +471,10 @@ function drawGanttChart(jobHistory, jobQueueHistory) {
   document.getElementById(
     "ganttChartContainer"
   ).style.height = `${containerHeight}px`;
-}
+};
+
+// -----------------------------------------------------------------------------------//
+//                            // Utility Functions //---------------------------------//
+// -----------------------------------------------------------------------------------//
+
+const toFloat = (value, dp) => parseFloat(value.toFixed(dp));
